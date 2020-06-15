@@ -9,6 +9,21 @@
 #define B_TREE_MIN_DEGREE 2
 #define B_TREE_NOT_FIND -1
 
+#define _2_3_TREE
+
+#ifdef _2_3_TREE
+// 2-3 tree
+#define B_TREE_NR_CHILD 3
+#define B_TREE_NR_KEYS 2
+#else
+#define B_TREE_NR_CHILD (2 * B_TREE_MIN_DEGREE) // 4(2-3-4), 3(2-3)
+#define B_TREE_NR_KEYS (B_TREE_NR_CHILD - 1) // 3(2-3-4), 2(2-3)
+#endif
+
+// 2-3-4 tree
+// #define B_TREE_NR_CHILD 4
+// #define B_TREE_NR_KEYS 3
+
 #ifndef key_t
 typedef unsigned int key_t;
 #endif
@@ -32,8 +47,10 @@ struct btree_node {
         int n; /**< Number of keys */
         bool is_leaf;
 
-        struct btree_item items[2 * B_TREE_MIN_DEGREE - 1];
-        struct btree_node *child[2 * B_TREE_MIN_DEGREE];
+        struct btree_item items[B_TREE_NR_KEYS];
+        struct btree_node *child[B_TREE_NR_CHILD];
+
+        struct btree_node *parent;
 };
 
 struct btree {
@@ -43,6 +60,7 @@ struct btree {
 struct btree *btree_create(void);
 struct btree_search_result btree_search(struct btree *T, key_t k);
 void btree_insert(struct btree *tree, key_t key, void *data);
+void btree_traverse(struct btree *tree);
 
 static inline struct btree_node *btree_alloc_node(void)
 {
