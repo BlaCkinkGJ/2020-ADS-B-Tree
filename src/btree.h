@@ -32,8 +32,8 @@ struct btree_node {
         int n; /**< Number of keys */
         bool is_leaf;
 
-        struct btree_item items[2 * B_TREE_MIN_DEGREE];
-        struct btree_node *child[2 * B_TREE_MIN_DEGREE + 1];
+        struct btree_item items[2 * B_TREE_MIN_DEGREE - 1];
+        struct btree_node *child[2 * B_TREE_MIN_DEGREE];
 };
 
 struct btree {

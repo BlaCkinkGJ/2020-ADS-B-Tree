@@ -37,13 +37,13 @@ exception:
 
 static struct btree_search_result __btree_search(struct btree_node *x, key_t k)
 {
-        int i = 1;
+        int i = 0;
         struct btree_search_result result;
-        while (i <= x->n && k > x->items[i].key) {
+        while (i < x->n && k > x->items[i].key) {
                 i = i + 1;
         }
 
-        if (i <= x->n && k == x->items[i].key) {
+        if (i < x->n && k == x->items[i].key) {
                 result.index = i;
                 result.node = x;
                 return result;
@@ -64,34 +64,34 @@ struct btree_search_result btree_search(struct btree *T, key_t k)
 static void btree_split_child(struct btree_node *x, int i)
 {
         struct btree_node *z = btree_alloc_node();
-        struct btree_node *y = x->child[i];
+        struct btree_node *y = x->child[i - 1];
 
         static const int t = B_TREE_MIN_DEGREE;
 
         z->is_leaf = y->is_leaf;
         z->n = t - 1;
 
-        for (int j = 1; j <= t - 1; j++) {
+        for (int j = 0; j < t - 1; j++) {
                 z->items[j] = y->items[j + t];
         }
 
         if (!y->is_leaf) {
-                for (int j = 1; j <= t; j++) {
+                for (int j = 0; j < t; j++) {
                         z->child[j] = y->child[j + t];
                 }
         }
 
         y->n = t - 1;
 
-        for (int j = x->n + 1; j >= i + 1; j--) {
+        for (int j = x->n; j >= i; j--) {
                 x->child[j + 1] = x->child[j];
         }
-        x->child[i + 1] = z;
+        x->child[i] = z;
 
         for (int j = x->n; j >= i; j--) {
-                x->items[j + 1] = x->items[j];
+                x->items[j] = x->items[j - 1];
         }
-        x->items[i] = y->items[t];
+        x->items[i - 1] = y->items[t - 1];
         x->n = x->n + 1;
 }
 
@@ -100,20 +100,18 @@ static void btree_insert_non_full(struct btree_node *x, struct btree_item *k)
         int i = x->n;
         static const int t = B_TREE_MIN_DEGREE;
         if (x->is_leaf) {
-                while (i >= 1 && k->key < x->items[i].key) {
-                        printf("%d ", x->items[i].key);
-                        x->items[i + 1] = x->items[i];
+                while (i >= 1 && k->key < x->items[i - 1].key) {
+                        x->items[i] = x->items[i - 1];
                         i = i - 1;
                 }
-                x->items[i + 1] = *k;
+                x->items[i] = *k;
                 x->n = x->n + 1;
         } else {
-                while (i >= 1 && k->key < x->items[i].key) {
+                while (i >= 1 && k->key < x->items[i - 1].key) {
                         i = i - 1;
                 }
-                i = i + 1;
                 if (x->child[i]->n == (2 * t - 1)) {
-                        btree_split_child(x, i);
+                        btree_split_child(x, i + 1);
                         if (k->key > x->items[i].key) {
                                 i = i + 1;
                         }
@@ -131,7 +129,7 @@ static void __btree_insert(struct btree *T, struct btree_item *k)
                 T->root = s;
                 s->is_leaf = false;
                 s->n = 0;
-                s->child[1] = r;
+                s->child[0] = r;
                 btree_split_child(s, 1);
                 btree_insert_non_full(s, k);
         } else {
