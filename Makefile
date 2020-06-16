@@ -56,8 +56,8 @@ SYMBOLS=-D RB_TREE_DEBUG -D TG_BST_TREE_DEBUG
 ifeq ($(OS),Windows_NT)
 	TEST_EXEC=./$(TARGET)
 else
-	TEST_EXEC=./$(TARGET)
-	#TEST_EXEC=valgrind --leak-check=full -v --error-limit=no ./$(TARGET)
+	#TEST_EXEC=./$(TARGET)
+	TEST_EXEC=valgrind --leak-check=full -v --error-limit=no ./$(TARGET)
 endif
 
 all: clean main

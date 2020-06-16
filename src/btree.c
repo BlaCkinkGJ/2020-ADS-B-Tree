@@ -2,7 +2,7 @@
 #include <errno.h>
 #include "btree.h"
 
-struct btree *btree_create(void)
+struct btree *btree_alloc(void)
 {
         struct btree *tree = (struct btree *)malloc(sizeof(struct btree));
         if (!tree) {
@@ -15,7 +15,6 @@ struct btree *btree_create(void)
                 goto exception;
         }
 
-        node->parent = NULL;
         node->is_leaf = true;
         node->n = 0;
 
@@ -70,11 +69,7 @@ static void btree_split_child(struct btree_node *x, int i)
         struct btree_node *y = x->child[i - 1];
 
         z->is_leaf = y->is_leaf;
-#ifdef _2_3_TREE
-        z->n = 0;
-#else
         z->n = t - 1;
-#endif
 
         for (int j = 0; j < t - 1; j++) {
                 z->items[j] = y->items[j + t];
@@ -98,9 +93,6 @@ static void btree_split_child(struct btree_node *x, int i)
         }
         x->items[i - 1] = y->items[t - 1];
         x->n = x->n + 1;
-
-        y->parent = x;
-        z->parent = x;
 }
 
 static void btree_insert_non_full(struct btree_node *x, struct btree_item *k)
@@ -138,16 +130,11 @@ static void __btree_insert(struct btree *T, struct btree_item *k)
                 s->n = 0;
                 s->child[0] = r;
 
-                s->parent = NULL;
-                r->parent = s;
-
                 btree_split_child(s, 1);
                 btree_insert_non_full(s, k);
         } else {
                 btree_insert_non_full(r, k);
         }
-        btree_traverse(T);
-        printf("------------------------\n");
 }
 
 void btree_insert(struct btree *tree, key_t key, void *data)
@@ -161,8 +148,6 @@ void __btree_traverse(struct btree_node *node, int indent)
         if (node == NULL) {
                 return;
         }
-        printf("parent(%d)\t",
-               (node->parent == NULL ? -1 : (int)node->parent->items[0].key));
 
         for (int i = 0; i < indent; i++) {
                 printf("\t");
@@ -183,16 +168,212 @@ void btree_traverse(struct btree *tree)
         __btree_traverse(tree->root, 0);
 }
 
-#ifdef _2_3_TREE
-static int __btree_delete(struct btree_node *node, key_t key)
+static void __btree_clear(struct btree_node *node)
 {
+        if (node) {
+                if (!node->is_leaf) {
+                        for (int i = 0; i < (node->n + 1); i++) {
+                                __btree_clear(node->child[i]);
+                        }
+                }
+                btree_dealloc_node(node);
+        }
 }
-#else
-static int __btree_delete(struct btree_node *node, key_t key)
+
+static void btree_clear(struct btree *tree)
 {
+        __btree_clear(tree->root);
+        tree->root = NULL;
 }
-#endif
+
+static struct btree_item btree_get_predecessor(struct btree_node *node)
+{
+        while (!node->is_leaf) {
+                node = node->child[node->n];
+        }
+        return node->items[node->n - 1];
+}
+
+static struct btree_item btree_get_successor(struct btree_node *node)
+{
+        while (!node->is_leaf) {
+                node = node->child[0];
+        }
+        return node->items[0];
+}
+
+static void btree_merge_child(struct btree *T, struct btree_node *p, int i)
+{
+        static const int t = B_TREE_MIN_DEGREE;
+        struct btree_node *child[] = {
+                p->child[i],
+                p->child[i + 1],
+        };
+
+        child[0]->n = B_TREE_NR_KEYS;
+        child[0]->items[t - 1] = p->items[i];
+
+        for (int j = 0; j < t - 1; j++) {
+                child[0]->items[j + t] = child[1]->items[j];
+        }
+
+        if (!child[0]->is_leaf) {
+                for (int j = 0; j < t; j++) {
+                        child[0]->child[j + t] = child[1]->child[j];
+                }
+        }
+
+        p->n -= 1;
+
+        for (int j = i; j < p->n; j++) {
+                p->items[j] = p->items[j + 1];
+                p->child[j + 1] = p->child[j + 2];
+        }
+
+        btree_dealloc_node(child[1]);
+        //child[1] = p->child[i + 1] = NULL;
+        if (p->n == 0) {
+                btree_dealloc_node(p);
+                if (p == T->root) {
+                        T->root = child[0];
+                }
+        }
+}
+
+static int __btree_delete(struct btree *T, struct btree_node *x, key_t key)
+{
+        static const int t = B_TREE_MIN_DEGREE;
+        int i = 0;
+
+        while (i < x->n && key > x->items[i].key) {
+                i = i + 1;
+        }
+
+        if (i < x->n && key == x->items[i].key) {
+                if (x->is_leaf) { /**< case 1 */
+                        x->n -= 1;
+                        for (; i < x->n; i++) {
+                                x->items[i] = x->items[i + 1];
+                        }
+                        goto end;
+                } else { /**< case 2 */
+                        struct btree_node *prev = x->child[i];
+                        struct btree_node *next = x->child[i + 1];
+                        if (prev->n >= t) { /**< case 2a */
+                                struct btree_item prev_item = { 0 };
+
+                                prev_item = btree_get_predecessor(prev);
+                                __btree_delete(T, prev, prev_item.key);
+                                x->items[i] = prev_item;
+
+                                goto end;
+                        } else if (next->n >= t) { /**< case 2b */
+                                struct btree_item next_item = { 0 };
+
+                                next_item = btree_get_successor(next);
+                                __btree_delete(T, next, next_item.key);
+                                x->items[i] = next_item;
+                                goto end;
+                        } else { /**< case 2c */
+                                btree_merge_child(T, x, i);
+                                __btree_delete(T, prev, key);
+                        }
+                }
+        } else { /**< case 3 */
+                struct btree_node *child = x->child[i];
+                if (child->n == t - 1) {
+                        struct btree_node *left = NULL;
+                        struct btree_node *right = NULL;
+                        int j = 0;
+
+                        if (i > 0) { /**< get left child */
+                                left = x->child[i - 1];
+                        }
+
+                        if (i < x->n) { /**< get right child */
+                                right = x->child[i + 1];
+                        }
+
+                        if (left && left->n >= t) { /**< case 3a */
+                                for (j = child->n; j > 0; --j) {
+                                        child->items[j] = child->items[j - 1];
+                                }
+                                child->items[0] = x->items[i - 1];
+
+                                if (!left->is_leaf) {
+                                        for (j = child->n + 1; j > 0; j--) {
+                                                child->child[j] =
+                                                        child->child[j - 1];
+                                        }
+                                        child->child[0] = left->child[left->n];
+                                }
+
+                                child->n += 1;
+                                x->items[i - 1] = left->items[left->n - 1];
+                                left->n -= 1;
+
+                        } else if (right && right->n >= t) { /**< case 3b */
+                                child->items[child->n] = x->items[i];
+                                child->n += 1;
+
+                                x->items[i] = right->items[0];
+                                right->n -= 1;
+
+                                for (j = 0; j < right->n; j++) {
+                                        right->items[j] = right->items[j + 1];
+                                }
+
+                                if (!right->is_leaf) {
+                                        child->child[child->n] =
+                                                right->child[0];
+                                        for (j = 0; j <= right->n; j++) {
+                                                right->child[j] =
+                                                        right->child[j + 1];
+                                        }
+                                }
+                        } else if (left) {
+                                btree_merge_child(T, x, i - 1);
+                                child = left;
+                        } else if (right) {
+                                btree_merge_child(T, x, i);
+                        } // end of left, right adjust
+                } // child[i] has "t-1" keys
+                __btree_delete(T, child, key);
+        } // end of find key location
+
+end:
+        return 0;
+}
 
 int btree_delete(struct btree *tree, key_t key)
 {
+        struct btree_node *node = NULL;
+        struct btree_node *root = tree->root;
+
+        node = (btree_search(tree, key)).node;
+        if (!node) {
+                pr_info("Cannot find specific node\n");
+                return -EINVAL;
+        }
+
+        if (root->n == 0 && root->is_leaf) {
+                btree_clear(tree);
+                return 0;
+        }
+
+        return __btree_delete(tree, root, key);
+}
+
+void btree_free(struct btree *tree)
+{
+        if (tree) {
+                struct btree_node *root = tree->root;
+                while (root->n > 0) {
+                        key_t key = root->items[0].key;
+                        btree_delete(tree, key);
+                        root = tree->root;
+                }
+                btree_dealloc_node(tree->root);
+                free(tree);
+        }
 }
