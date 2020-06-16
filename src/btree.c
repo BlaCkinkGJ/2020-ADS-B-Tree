@@ -2,14 +2,83 @@
 #include <errno.h>
 #include "btree.h"
 
-struct btree *btree_alloc(void)
+static struct btree_node *btree_alloc_node(struct btree *T)
 {
-        struct btree *tree = (struct btree *)malloc(sizeof(struct btree));
+        struct btree_node *node = NULL;
+        const int nr_keys = B_TREE_NR_KEYS(T->min_degree);
+        const int nr_child = B_TREE_NR_CHILD(T->min_degree);
+
+        node = (struct btree_node *)malloc(sizeof(struct btree_node));
+        if (!node) {
+                pr_info("Node allocation failed...\n");
+                goto exception;
+        }
+        node->n = 0;
+        node->is_leaf = false;
+        node->items =
+                (struct btree_item *)calloc(nr_keys, sizeof(struct btree_item));
+        if (!node->items) {
+                pr_info("Node item allocation failed...\n");
+                goto exception;
+        }
+        node->child = (struct btree_node **)calloc(nr_child,
+                                                   sizeof(struct btree_node *));
+        if (!node->child) {
+                pr_info("Node child allocation failed...\n");
+                goto exception;
+        }
+        return node;
+exception:
+        if (node->child) {
+                free(node->child);
+        }
+        if (node->items) {
+                free(node->items);
+        }
+        if (node) {
+                free(node);
+        }
+        return NULL;
+}
+
+static void btree_dealloc_node(struct btree_node *node)
+{
+        if (node != NULL) {
+#ifdef B_TREE_DEALLOC_ITEM
+                for (int i = 0; i < B_TREE_NR_KEYS; i++) {
+                        if (node->items[i].data) {
+                                free(node->items[i].data);
+                        }
+                }
+#endif
+                if (node->child) {
+                        free(node->child);
+                }
+                if (node->items) {
+                        free(node->items);
+                }
+                free(node);
+        }
+}
+
+struct btree *btree_alloc(int min_degree)
+{
+        struct btree *tree = NULL;
+        struct btree_node *node = NULL;
+
+        if (min_degree < B_TREE_MIN_DEGREE) {
+                pr_info("Degree must over 2\n");
+                return NULL;
+        }
+
+        tree = (struct btree *)malloc(sizeof(struct btree));
         if (!tree) {
                 pr_info("Allocation tree failed\n");
                 goto exception;
         }
-        struct btree_node *node = btree_alloc_node();
+        tree->min_degree = min_degree; /**< DO NOT CHANGE */
+
+        node = btree_alloc_node(tree);
         if (!node) {
                 pr_info("Allocation node failed\n");
                 goto exception;
@@ -24,7 +93,7 @@ struct btree *btree_alloc(void)
 
 exception:
         if (node) {
-                free(node);
+                btree_dealloc_node(node);
                 tree->root = NULL;
         }
 
@@ -56,16 +125,16 @@ static struct btree_search_result __btree_search(struct btree_node *x, key_t k)
         }
 }
 
-struct btree_search_result btree_search(struct btree *T, key_t k)
+struct btree_search_result btree_search(struct btree *tree, key_t key)
 {
-        return __btree_search(T->root, k);
+        return __btree_search(tree->root, key);
 }
 
-static void btree_split_child(struct btree_node *x, int i)
+static void btree_split_child(struct btree *T, struct btree_node *x, int i)
 {
-        static const int t = B_TREE_MIN_DEGREE;
+        const int t = T->min_degree;
 
-        struct btree_node *z = btree_alloc_node();
+        struct btree_node *z = btree_alloc_node(T);
         struct btree_node *y = x->child[i - 1];
 
         z->is_leaf = y->is_leaf;
@@ -95,7 +164,8 @@ static void btree_split_child(struct btree_node *x, int i)
         x->n = x->n + 1;
 }
 
-static void btree_insert_non_full(struct btree_node *x, struct btree_item *k)
+static void btree_insert_non_full(struct btree *T, struct btree_node *x,
+                                  struct btree_item *k)
 {
         int i = x->n;
 
@@ -110,30 +180,30 @@ static void btree_insert_non_full(struct btree_node *x, struct btree_item *k)
                 while (i >= 1 && k->key < x->items[i - 1].key) {
                         i = i - 1;
                 }
-                if (x->child[i]->n == B_TREE_NR_KEYS) {
-                        btree_split_child(x, i + 1);
+                if (x->child[i]->n == B_TREE_NR_KEYS(T->min_degree)) {
+                        btree_split_child(T, x, i + 1);
                         if (k->key > x->items[i].key) {
                                 i = i + 1;
                         }
                 }
-                btree_insert_non_full(x->child[i], k);
+                btree_insert_non_full(T, x->child[i], k);
         }
 }
 
 static void __btree_insert(struct btree *T, struct btree_item *k)
 {
         struct btree_node *r = T->root;
-        if (r->n == B_TREE_NR_KEYS) {
-                struct btree_node *s = btree_alloc_node();
+        if (r->n == B_TREE_NR_KEYS(T->min_degree)) {
+                struct btree_node *s = btree_alloc_node(T);
                 T->root = s;
                 s->is_leaf = false;
                 s->n = 0;
                 s->child[0] = r;
 
-                btree_split_child(s, 1);
-                btree_insert_non_full(s, k);
+                btree_split_child(T, s, 1);
+                btree_insert_non_full(T, s, k);
         } else {
-                btree_insert_non_full(r, k);
+                btree_insert_non_full(T, r, k);
         }
 }
 
@@ -204,13 +274,13 @@ static struct btree_item btree_get_successor(struct btree_node *node)
 
 static void btree_merge_child(struct btree *T, struct btree_node *p, int i)
 {
-        static const int t = B_TREE_MIN_DEGREE;
+        const int t = T->min_degree;
         struct btree_node *child[] = {
                 p->child[i],
                 p->child[i + 1],
         };
 
-        child[0]->n = B_TREE_NR_KEYS;
+        child[0]->n = B_TREE_NR_KEYS(T->min_degree);
         child[0]->items[t - 1] = p->items[i];
 
         for (int j = 0; j < t - 1; j++) {
@@ -242,7 +312,7 @@ static void btree_merge_child(struct btree *T, struct btree_node *p, int i)
 
 static int __btree_delete(struct btree *T, struct btree_node *x, key_t key)
 {
-        static const int t = B_TREE_MIN_DEGREE;
+        const int t = T->min_degree;
         int i = 0;
 
         while (i < x->n && key > x->items[i].key) {
