@@ -301,7 +301,6 @@ static void btree_merge_child(struct btree *T, struct btree_node *p, int i)
         }
 
         btree_dealloc_node(child[1]);
-        //child[1] = p->child[i + 1] = NULL;
         if (p->n == 0) {
                 btree_dealloc_node(p);
                 if (p == T->root) {
