@@ -45,7 +45,7 @@ static void btree_dealloc_node(struct btree_node *node)
 {
         if (node != NULL) {
 #ifdef B_TREE_DEALLOC_ITEM
-                for (int i = 0; i < B_TREE_NR_KEYS; i++) {
+                for (int i = 0; i < node->n; i++) {
                         if (node->items[i].data) {
                                 free(node->items[i].data);
                         }

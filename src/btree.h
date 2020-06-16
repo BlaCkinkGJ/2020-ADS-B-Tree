@@ -6,8 +6,9 @@
 #include <stdlib.h>
 #include <time.h>
 
-#ifndef B_TREE_DEALLOC_ITEM
-#pragma message "[warning] item deallocation disabled..."
+#ifdef B_TREE_DEALLOC_ITEM
+#pragma message                                                                \
+        "[WARN] I am not recommended to use dynamic allocation in `item->data`..."
 #endif
 
 #define B_TREE_MIN_DEGREE 2
