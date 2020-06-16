@@ -14,18 +14,8 @@
 #define B_TREE_MIN_DEGREE 2
 #define B_TREE_NOT_FOUND -1
 
-#ifdef _2_3_TREE
-// 2-3 tree
-#define B_TREE_NR_CHILD 3
-#define B_TREE_NR_KEYS 2
-#else
 #define B_TREE_NR_CHILD(DEG) (2 * (DEG)) // 4(2-3-4), 3(2-3)
 #define B_TREE_NR_KEYS(DEG) (B_TREE_NR_CHILD(DEG) - 1) // 3(2-3-4), 2(2-3)
-#endif
-
-// 2-3-4 tree
-// #define B_TREE_NR_CHILD 4
-// #define B_TREE_NR_KEYS 3
 
 #ifndef key_t
 typedef unsigned int key_t;
