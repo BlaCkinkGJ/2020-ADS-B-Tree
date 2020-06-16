@@ -1,3 +1,13 @@
+/**
+ * @file btree.h
+ * @author 오기준 (kijunking@pusan.ac.kr)
+ * @brief B-Tree에 대한 선언적 내용이 들어가 있다.
+ * @version 0.1
+ * @date 2020-06-16
+ * 
+ * @copyright Copyright (c) 2020 오기준
+ * 
+ */
 #ifndef _B_TREE_H
 #define _B_TREE_H
 
