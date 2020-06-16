@@ -363,7 +363,7 @@ static int __btree_delete(struct btree *T, struct btree_node *x, key_t key)
                                 right = x->child[i + 1];
                         }
 
-                        if (left && left->n >= t) { /**< case 3a */
+                        if (left && left->n >= t) {
                                 for (j = child->n; j > 0; --j) {
                                         child->items[j] = child->items[j - 1];
                                 }
@@ -381,7 +381,7 @@ static int __btree_delete(struct btree *T, struct btree_node *x, key_t key)
                                 x->items[i - 1] = left->items[left->n - 1];
                                 left->n -= 1;
 
-                        } else if (right && right->n >= t) { /**< case 3b */
+                        } else if (right && right->n >= t) {
                                 child->items[child->n] = x->items[i];
                                 child->n += 1;
 
