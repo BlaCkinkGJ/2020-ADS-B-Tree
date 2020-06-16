@@ -117,7 +117,7 @@ static struct btree_search_result __btree_search(struct btree_node *x, key_t k)
                 result.node = x;
                 return result;
         } else if (x->is_leaf) {
-                result.index = B_TREE_NOT_FIND;
+                result.index = B_TREE_NOT_FOUND;
                 result.node = NULL;
                 return result;
         } else {

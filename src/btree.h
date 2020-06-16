@@ -12,7 +12,7 @@
 #endif
 
 #define B_TREE_MIN_DEGREE 2
-#define B_TREE_NOT_FIND 0
+#define B_TREE_NOT_FOUND -1
 
 #ifdef _2_3_TREE
 // 2-3 tree
